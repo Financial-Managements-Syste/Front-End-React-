@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Transactions from './Transactions';
+import Savings from './Savings';
 
 // Simple id generator
 function generateId(prefix) {
@@ -396,6 +397,7 @@ function Dashboard({ user, onLogout }) {
             { key: 'categories', label: 'Categories' },
             { key: 'budgets', label: 'Budgets' },
             { key: 'transactions', label: 'Transactions' },
+            { key: 'savings', label: 'Savings' },
           ].map(t => (
             <button
               key={t.key}
@@ -608,6 +610,9 @@ function Dashboard({ user, onLogout }) {
         {/* Transactions */}
         {activeTab === 'transactions' && (
           <Transactions user={user} />
+        )}
+        {activeTab === 'savings' && (
+          <Savings user={user} />
         )}
       </div>
     </div>
