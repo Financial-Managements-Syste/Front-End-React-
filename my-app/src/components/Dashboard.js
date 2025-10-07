@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import Transactions from './Transactions';
 
 // Simple id generator
 function generateId(prefix) {
@@ -21,8 +22,9 @@ function Dashboard({ user, onLogout }) {
   const [budgetError, setBudgetError] = useState('');
 
   // Backend URL
-  const CATEGORY_API = "http://localhost:8081/api/categories";
-  const BUDGET_API = "http://localhost:8082/api/budgets";
+  const CATEGORY_API = process.env.REACT_APP_CATEGORY_API || "http://localhost:8081/api/categories";
+  const BUDGET_API = process.env.REACT_APP_BUDGET_API || "http://localhost:8082/api/budgets";
+  const TRANSACTION_API = process.env.REACT_APP_TRANSACTION_API || "http://localhost:8083/api/transactions";
 
   function normalizeCategory(apiObj) {
     if (!apiObj) return null;
@@ -47,6 +49,18 @@ function Dashboard({ user, onLogout }) {
     const userId = userIdRaw != null && userIdRaw !== '' ? Number(userIdRaw) : null;
     const categoryId = categoryIdRaw != null && categoryIdRaw !== '' ? Number(categoryIdRaw) : null;
     return { id, name, amount: isNaN(amount) ? 0 : amount, period, description, startDate, endDate, userId, categoryId };
+  }
+
+  function normalizeTransaction(apiObj) {
+    if (!apiObj) return null;
+    const id = apiObj.id ?? apiObj.transactionId ?? apiObj.transaction_id;
+    const amountRaw = apiObj.amount ?? 0;
+    const amount = typeof amountRaw === 'string' ? parseFloat(amountRaw) : Number(amountRaw || 0);
+    const transactionType = apiObj.transactionType ?? apiObj.type ?? '';
+    const categoryIdRaw = apiObj.categoryId ?? apiObj.category_id ?? null;
+    const categoryId = categoryIdRaw != null && categoryIdRaw !== '' ? Number(categoryIdRaw) : null;
+    const transactionDate = apiObj.transactionDate ?? apiObj.date ?? '';
+    return { id, amount: isNaN(amount) ? 0 : amount, transactionType, categoryId, transactionDate };
   }
 
   // Load categories from backend
@@ -91,6 +105,20 @@ function Dashboard({ user, onLogout }) {
         console.error("❌ Error fetching budgets:", err);
         console.warn("⚠️ Could not fetch budgets from backend");
       });
+  }, [user]);
+
+  // Load transactions for current user
+  useEffect(() => {
+    const userObj = user?.user || user;
+    const userId = userObj?.user_id || userObj?.id || userObj?.userId || user?.id || user?.user_id || user?.userId;
+    if (!userId) {
+      setTransactions([]);
+      return;
+    }
+    fetch(`${TRANSACTION_API}/user/${userId}`)
+      .then(res => res.json())
+      .then(data => setTransactions(Array.isArray(data) ? data.map(normalizeTransaction).filter(Boolean) : []))
+      .catch(() => setTransactions([]));
   }, [user]);
 
   // Log helper
@@ -367,6 +395,7 @@ function Dashboard({ user, onLogout }) {
             { key: 'overview', label: 'Overview' },
             { key: 'categories', label: 'Categories' },
             { key: 'budgets', label: 'Budgets' },
+            { key: 'transactions', label: 'Transactions' },
           ].map(t => (
             <button
               key={t.key}
@@ -515,13 +544,40 @@ function Dashboard({ user, onLogout }) {
                   if (start && end && end > start) {
                     progress = Math.min(1, Math.max(0, (now - start) / (end - start)));
                   }
+                  const relatedTx = transactions.filter(t => {
+                    const catMatch = (t.categoryId || t.category_id) === (b.categoryId || b.category_id);
+                    if (!catMatch) return false;
+                    if (!t.transactionDate || !start || !end) return catMatch;
+                    const d = new Date(t.transactionDate);
+                    return !isNaN(d) && d >= start && d <= end;
+                  });
+                  const used = relatedTx.filter(t => (t.transactionType || '').toLowerCase() !== 'income').reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+                  const received = relatedTx.filter(t => (t.transactionType || '').toLowerCase() === 'income').reduce((s, t) => s + (t.amount || 0), 0);
+                  const netUsed = Math.max(0, used - received);
+                  const budgetAmount = Number(b.amount || 0);
+                  const remaining = Math.max(0, budgetAmount - netUsed);
+                  const usedPercent = budgetAmount > 0 ? Math.min(100, Math.max(0, (netUsed / budgetAmount) * 100)) : 0;
                   return (
-                    <li key={b.id} className="py-3 grid md:grid-cols-3 gap-3 md:items-center">
+                    <li key={b.id} className="py-4 grid md:grid-cols-3 gap-4 md:items-center">
                       <div>
-                        <div className="text-white font-semibold">{b.name}</div>
-                        <div className="text-blue-300 text-sm">${(b.amount||0).toFixed(2)} • {b.period}</div>
+                        <div className="text-white font-semibold text-base">{b.name}</div>
+                        <div className="text-blue-300 text-sm">Budget: <span className="text-white font-semibold">${(b.amount||0).toFixed(2)}</span> • {b.period}</div>
                         <div className="text-blue-300 text-xs">Category: {categories.find(c => c.id === (b.categoryId || b.category_id))?.name || '—'}</div>
                         <div className="text-blue-300 text-xs">{b.startDate || '—'} → {b.endDate || '—'}</div>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          <span className="px-2 py-1 rounded text-xs border border-blue-900 bg-white/5 text-blue-200">Used: <span className="text-white font-semibold">${used.toFixed(2)}</span></span>
+                          <span className="px-2 py-1 rounded text-xs border border-emerald-900 bg-emerald-500/10 text-emerald-300">Received: <span className="text-white font-semibold">${received.toFixed(2)}</span></span>
+                          <span className="px-2 py-1 rounded text-xs border border-purple-900 bg-purple-500/10 text-purple-200">Remaining: <span className="text-white font-semibold">${remaining.toFixed(2)}</span></span>
+                        </div>
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between text-xs text-blue-300 mb-1">
+                            <span>Usage</span>
+                            <span>{Math.round(usedPercent)}%</span>
+                          </div>
+                          <div className="h-2 rounded bg-white/10 overflow-hidden">
+                            <div className="h-2" style={{ width: `${Math.round(usedPercent)}%`, background: 'linear-gradient(90deg,#ef4444,#7c3aed)' }} />
+                          </div>
+                        </div>
                       </div>
                       <div className="flex items-center gap-4">
                         <svg width="72" height="72" viewBox="0 0 42 42">
@@ -534,7 +590,7 @@ function Dashboard({ user, onLogout }) {
                             </linearGradient>
                           </defs>
                         </svg>
-                        <div className="text-blue-200 text-sm">Time elapsed: {Math.round(progress*100)}%</div>
+                        <div className="text-blue-200 text-sm">Time elapsed: <span className="text-white font-semibold">{Math.round(progress*100)}%</span></div>
                       </div>
                       <div className="flex gap-2 md:justify-end">
                         <button onClick={() => editBudget(b)} className="px-3 py-1 text-xs rounded border border-blue-900 text-blue-200">Edit</button>
@@ -547,6 +603,11 @@ function Dashboard({ user, onLogout }) {
               </ul>
             </div>
           </section>
+        )}
+
+        {/* Transactions */}
+        {activeTab === 'transactions' && (
+          <Transactions user={user} />
         )}
       </div>
     </div>
