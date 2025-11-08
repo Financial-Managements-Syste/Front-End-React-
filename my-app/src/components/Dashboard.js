@@ -419,9 +419,51 @@ function Dashboard({ user, onLogout }) {
         {activeTab === 'overview' && (
           <div className="p-6 rounded-2xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
             <h2 className="text-xl font-bold text-white mb-4">Overview</h2>
-            <div className="text-blue-200">Track and manage categories connected with your Spring Boot backend.</div>
+            <div className="text-blue-200 mb-6">Track and manage your finances effectively. Here's a quick snapshot:</div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Total Income */}
+              <div className="p-4 rounded-xl bg-white/5 border border-blue-900">
+                <div className="text-blue-300 text-sm">Total Income</div>
+                <div className="text-white font-bold text-2xl">${totals.income.toFixed(2)}</div>
+              </div>
+              {/* Total Expenses */}
+              <div className="p-4 rounded-xl bg-white/5 border border-red-900">
+                <div className="text-blue-300 text-sm">Total Expenses</div>
+                <div className="text-white font-bold text-2xl">${totals.expenses.toFixed(2)}</div>
+              </div>
+              {/* Net Balance */}
+              <div className="p-4 rounded-xl bg-white/5 border border-green-900">
+                <div className="text-blue-300 text-sm">Net Balance</div>
+                <div className="text-white font-bold text-2xl">${totals.net.toFixed(2)}</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+              {/* Total Budget */}
+              <div className="p-4 rounded-xl bg-white/5 border border-purple-900">
+                <div className="text-blue-300 text-sm">Total Budget Allocated</div>
+                <div className="text-white font-bold text-2xl">${totals.budgetTotal.toFixed(2)}</div>
+              </div>
+              {/* Categories Count */}
+              <div className="p-4 rounded-xl bg-white/5 border border-blue-600">
+                <div className="text-blue-300 text-sm">Categories</div>
+                <div className="text-white font-bold text-2xl">{categories.length}</div>
+              </div>
+              {/* Transactions Count */}
+              <div className="p-4 rounded-xl bg-white/5 border border-yellow-600">
+                <div className="text-blue-300 text-sm">Transactions</div>
+                <div className="text-white font-bold text-2xl">{transactions.length}</div>
+              </div>
+            </div>
+
+            {/* Quick tips */}
+            <div className="mt-6 text-blue-200 text-sm">
+              Keep track of your expenses, set realistic budgets, and save smartly. Your financial health at a glance!
+            </div>
           </div>
         )}
+
 
         {/* Categories */}
         {activeTab === 'categories' && (
