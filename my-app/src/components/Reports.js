@@ -20,6 +20,16 @@ function Reports({ user }) {
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
   const [categoryType, setCategoryType] = useState('All');
+  
+  // NEW: Date range for category distribution
+  const [startDate, setStartDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30); // Last 30 days by default
+    return date.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
 
   const REPORT_API = process.env.REACT_APP_REPORT_API || 'http://localhost:8095/api/reports';
   const CATEGORY_API = process.env.REACT_APP_CATEGORY_API || 'http://localhost:8081/api/categories';
@@ -32,7 +42,7 @@ function Reports({ user }) {
   useEffect(() => {
     if (!userId) return;
     loadCurrentReport();
-  }, [userId, activeReport, month, year, categoryType]);
+  }, [userId, activeReport, month, year, categoryType, startDate, endDate]);
 
   useEffect(() => {
     fetch(CATEGORY_API)
@@ -70,7 +80,8 @@ function Reports({ user }) {
         url = `${REPORT_API}/savings-progress?userId=${userId}`;
         break;
       case 'category-distribution':
-        url = `${REPORT_API}/category-distribution?userId=${userId}`;
+        // FIXED: Add date range and categoryType parameters
+        url = `${REPORT_API}/category-distribution?userId=${userId}&startDate=${startDate}&endDate=${endDate}&categoryType=${categoryType}`;
         break;
       case 'savings-forecast':
         url = `${REPORT_API}/savings-forecast?userId=${userId}`;
@@ -83,9 +94,17 @@ function Reports({ user }) {
         return;
     }
     
+    console.log('🔍 Loading report from:', url);
+    
     fetch(url)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        return res.json();
+      })
       .then(data => {
+        console.log('📦 Report data received:', data);
         switch(activeReport) {
           case 'monthly-expenditure':
             setMonthlyExpenditure(Array.isArray(data) ? data : []);
@@ -109,8 +128,8 @@ function Reports({ user }) {
         setLoading(false);
       })
       .catch(err => {
-        console.error('Error loading report:', err);
-        setError('Failed to load report data');
+        console.error('❌ Error loading report:', err);
+        setError(`Failed to load report data: ${err.message}`);
         setLoading(false);
       });
   }
@@ -120,7 +139,6 @@ function Reports({ user }) {
     if (!element) return;
 
     try {
-      // Using html2canvas and jsPDF approach (these would need to be imported in real app)
       const reportData = {
         title: getReportTitle(),
         date: new Date().toLocaleDateString(),
@@ -128,7 +146,6 @@ function Reports({ user }) {
         data: getCurrentReportData()
       };
 
-      // Create a printable version
       const printWindow = window.open('', '_blank');
       const printContent = generatePrintHTML(reportData);
       
@@ -583,19 +600,6 @@ function Reports({ user }) {
     { key: 'summary', label: 'Summary Report', icon: FileDown }
   ];
 
-  const filteredCategoryData = useMemo(() => {
-    if (activeReport !== 'category-distribution') return categoryDistribution;
-    
-    return categoryDistribution.filter(item => {
-      if (categoryType === 'All') return true;
-      const category = categories.find(c => 
-        (c.name || '').toLowerCase() === (item.categoryName || item.category || '').toLowerCase()
-      );
-      if (!category) return false;
-      return (category.type || '').toLowerCase() === categoryType.toLowerCase();
-    });
-  }, [categoryDistribution, categoryType, categories, activeReport]);
-
   return (
     <div className="min-h-screen p-6" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)' }}>
       <div className="max-w-7xl mx-auto space-y-6">
@@ -672,17 +676,37 @@ function Reports({ user }) {
               </div>
             )}
             {activeReport === 'category-distribution' && (
-              <div>
-                <label className="block text-blue-300 text-sm mb-2">Category Type</label>
-                <select
-                  value={categoryType}
-                  onChange={e => setCategoryType(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg bg-slate-900/50 border border-blue-900/50 text-white focus:outline-none focus:border-blue-500"
-                >
-                  <option value="All">All Categories</option>
-                  <option value="Expense">Expense Only</option>
-                  <option value="Income">Income Only</option>
-                </select>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-blue-300 text-sm mb-2">Category Type</label>
+                  <select
+                    value={categoryType}
+                    onChange={e => setCategoryType(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg bg-slate-900/50 border border-blue-900/50 text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="All">All Categories</option>
+                    <option value="Expense">Expense Only</option>
+                    <option value="Income">Income Only</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-blue-300 text-sm mb-2">Start Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg bg-slate-900/50 border border-blue-900/50 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-blue-300 text-sm mb-2">End Date</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg bg-slate-900/50 border border-blue-900/50 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -710,7 +734,7 @@ function Reports({ user }) {
                 <p className="text-blue-300 text-sm mt-1">Generated on {new Date().toLocaleDateString()}</p>
               </div>
 
-              {/* Report-specific content rendering */}
+              {/* Monthly Expenditure Report */}
               {activeReport === 'monthly-expenditure' && monthlyExpenditure.length === 0 && (
                 <div className="text-center py-12 text-blue-300">No expenditure data available for this period.</div>
               )}
@@ -745,6 +769,7 @@ function Reports({ user }) {
                 </div>
               )}
 
+              {/* Budget Adherence Report */}
               {activeReport === 'budget-adherence' && budgetAdherence.length === 0 && (
                 <div className="text-center py-12 text-blue-300">No budget adherence data available.</div>
               )}
@@ -812,6 +837,7 @@ function Reports({ user }) {
                 </div>
               )}
 
+              {/* Savings Progress Report */}
               {activeReport === 'savings-progress' && savingsProgress.length === 0 && (
                 <div className="text-center py-12 text-blue-300">No savings progress data available.</div>
               )}
@@ -860,17 +886,18 @@ function Reports({ user }) {
                 </div>
               )}
 
-              {activeReport === 'category-distribution' && filteredCategoryData.length === 0 && (
+              {/* Category Distribution Report */}
+              {activeReport === 'category-distribution' && categoryDistribution.length === 0 && (
                 <div className="text-center py-12 text-blue-300">No category distribution data available.</div>
               )}
               
-              {activeReport === 'category-distribution' && filteredCategoryData.length > 0 && (() => {
-                const total = filteredCategoryData.reduce((sum, i) => sum + Number(i.totalAmount || i.amount || 0), 0) || 1;
+              {activeReport === 'category-distribution' && categoryDistribution.length > 0 && (() => {
+                const total = categoryDistribution.reduce((sum, i) => sum + Number(i.totalAmount || i.amount || 0), 0) || 1;
                 const colors = ['#06b6d4', '#7c3aed', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6', '#ec4899', '#14b8a6'];
                 
                 return (
                   <div className="space-y-4">
-                    {filteredCategoryData.map((item, idx) => {
+                    {categoryDistribution.map((item, idx) => {
                       const amount = Number(item.totalAmount || item.amount || 0);
                       const percentage = (amount / total * 100).toFixed(1);
                       const color = colors[idx % colors.length];
@@ -916,6 +943,7 @@ function Reports({ user }) {
                 );
               })()}
 
+              {/* Savings Forecast Report */}
               {activeReport === 'savings-forecast' && !savingsForecast && (
                 <div className="text-center py-12 text-blue-300">No forecast data available.</div>
               )}
@@ -965,6 +993,7 @@ function Reports({ user }) {
                 </div>
               )}
 
+              {/* Summary Report */}
               {activeReport === 'summary' && !summary && (
                 <div className="text-center py-12 text-blue-300">No summary data available.</div>
               )}

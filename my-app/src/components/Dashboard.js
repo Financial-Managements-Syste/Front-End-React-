@@ -366,9 +366,14 @@ function Dashboard({ user, onLogout }) {
   }
 
   // Totals
+  // Totals
   const totals = useMemo(() => {
-    const income = transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const expenses = transactions.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const income = transactions
+      .filter(t => (t.transactionType || '').toLowerCase() === 'income')
+      .reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const expenses = transactions
+      .filter(t => (t.transactionType || '').toLowerCase() !== 'income')
+      .reduce((s, t) => s + Math.abs(t.amount || 0), 0);
     const budgetTotal = budgets.reduce((s, b) => s + (b.amount || 0), 0);
     return { income, expenses, budgetTotal, net: income - expenses };
   }, [transactions, budgets]);
